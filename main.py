@@ -1,3 +1,5 @@
+#UPDATED ABOUT PAGE
+
 import streamlit as st
 
 
@@ -59,12 +61,31 @@ def accountExists(username):
         with open('students.csv', 'r') as f:
             content = f.read()
             f.close()
-            # Check if username appears in the file
             if username in content:
                 return True
             return False
     except FileNotFoundError:
-        # If file doesn't exist yet, account doesn't exist
+        return False
+
+
+def verifyStudent(firstName, lastName, username):
+    """Check if student credentials match an entry in students.csv"""
+    try:
+        with open('students.csv', 'r') as f:
+            lines = f.readlines()
+            f.close()
+        for line in lines:
+            if line.strip():
+                # Format: FirstName LastName, username, grade, subjects
+                parts = line.strip().split(', ')
+                if len(parts) >= 2:
+                    full_name = parts[0]
+                    stored_username = parts[1]
+                    if (full_name.lower() == f"{firstName} {lastName}".lower() and
+                            stored_username.lower() == username.lower()):
+                        return True
+        return False
+    except FileNotFoundError:
         return False
 
 
@@ -78,25 +99,17 @@ def loadTutors():
 
         for line in lines:
             if line.strip():
-                # Parse CSV line: Name, username, "bio", [subjects], image
                 parts = line.strip().split(', ')
-                name = parts[0]  # "FirstName LastName"
+                name = parts[0]
                 username = parts[1]
-
-                # Find the bio (enclosed in quotes)
                 bio_start = line.find('"')
                 bio_end = line.find('"', bio_start + 1)
                 bio = line[bio_start + 1:bio_end]
-
-                # Find the subjects list
                 subjects_start = line.find('[')
                 subjects_end = line.find(']')
                 subjects_str = line[subjects_start:subjects_end + 1]
-                subjects = eval(subjects_str)  # Convert string to list
-
-                # Get image filename (last part)
+                subjects = eval(subjects_str)
                 image = parts[-1].strip()
-
                 tutors.append({
                     'name': name,
                     'username': username,
@@ -105,22 +118,117 @@ def loadTutors():
                     'image': image
                 })
     except FileNotFoundError:
-        # Return empty list if file doesn't exist
         pass
 
     return tutors
 
 
+def verifyTutor(firstName, lastName, username):
+    """Check if credentials match a tutor in tutors.csv"""
+    try:
+        with open('tutors.csv', 'r') as f:
+            lines = f.readlines()
+            f.close()
+        for line in lines:
+            if line.strip():
+                parts = line.strip().split(', ')
+                if len(parts) >= 2:
+                    full_name = parts[0]
+                    stored_username = parts[1]
+                    if (full_name.lower() == f"{firstName} {lastName}".lower() and
+                            stored_username.lower() == username.lower()):
+                        return True
+        return False
+    except FileNotFoundError:
+        return False
+
+
+def getStudentSubjects(full_name):
+    """Get subject indices for a student from students.csv"""
+    try:
+        with open('students.csv', 'r') as f:
+            lines = f.readlines()
+            f.close()
+        for line in lines:
+            if line.strip() and line.strip().startswith(full_name):
+                subjects_start = line.find('[')
+                subjects_end = line.find(']')
+                if subjects_start != -1 and subjects_end != -1:
+                    return eval(line[subjects_start:subjects_end + 1])
+    except FileNotFoundError:
+        pass
+    return []
+
+
+def getTutorSubjects(full_name):
+    """Get subject indices for a tutor from tutors.csv"""
+    try:
+        with open('tutors.csv', 'r') as f:
+            lines = f.readlines()
+            f.close()
+        for line in lines:
+            if line.strip() and line.strip().startswith(full_name):
+                subjects_start = line.find('[')
+                subjects_end = line.find(']')
+                if subjects_start != -1 and subjects_end != -1:
+                    return eval(line[subjects_start:subjects_end + 1])
+    except FileNotFoundError:
+        pass
+    return []
+
+
 # Initialize session state
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'home'
+if 'signed_in' not in st.session_state:
+    st.session_state.signed_in = False
+if 'signed_in_user' not in st.session_state:
+    st.session_state.signed_in_user = None
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None  # 'student' or 'tutor'
+if 'show_confetti' not in st.session_state:
+    st.session_state.show_confetti = False
+
+# Restore session from URL query params on reload
+if not st.session_state.signed_in:
+    params = st.query_params
+    if 'user' in params and params['user']:
+        st.session_state.signed_in = True
+        st.session_state.signed_in_user = params['user']
+    if 'type' in params and params['type']:
+        st.session_state.user_type = params['type']
+if 'page' in st.query_params:
+    st.session_state.current_page = st.query_params['page']
+if 'show_confetti' not in st.session_state:
+    st.session_state.show_confetti = False
 
 # Sidebar navigation
 st.sidebar.title("Navigation")
-if st.sidebar.button("Home", use_container_width=True):
+if st.sidebar.button("About Page", use_container_width=True):
     st.session_state.current_page = 'home'
-if st.sidebar.button("Create Account", use_container_width=True):
-    st.session_state.current_page = 'create_account'
+    st.query_params['page'] = 'home'
+
+if not st.session_state.signed_in:
+    if st.sidebar.button("Sign In", use_container_width=True):
+        st.session_state.current_page = 'portal'
+        st.query_params['page'] = 'portal'
+    if st.sidebar.button("Create Account", use_container_width=True):
+        st.session_state.current_page = 'create_account'
+        st.query_params['page'] = 'create_account'
+else:
+    portal_label = "Student Portal" if st.session_state.user_type == 'student' else "Tutor Portal"
+    portal_page = "student_portal" if st.session_state.user_type == 'student' else "tutor_portal"
+    if st.sidebar.button(portal_label, use_container_width=True):
+        st.session_state.current_page = portal_page
+        st.query_params['page'] = portal_page
+    if st.sidebar.button("Log Out", use_container_width=True):
+        st.session_state.signed_in = False
+        st.session_state.signed_in_user = None
+        st.session_state.user_type = None
+        st.session_state.show_confetti = False
+        st.session_state.current_page = 'home'
+        st.query_params.clear()
+        st.rerun()
 
 st.sidebar.divider()
 st.sidebar.markdown("### BridgeSTEM")
@@ -361,8 +469,7 @@ if st.session_state.current_page == 'home':
     tutors = loadTutors()
     SUBJECTS = openSubjectList()
 
-    # Create rows of 3 tutors each (10 total = 4 rows, last row has 1 tutor)
-    num_rows = (len(tutors) + 2) // 3  # Round up division
+    num_rows = (len(tutors) + 2) // 3
 
     for row in range(num_rows):
         cols = st.columns(3)
@@ -370,12 +477,10 @@ if st.session_state.current_page == 'home':
         for col_idx, col in enumerate(cols):
             tutor_idx = row * 3 + col_idx
 
-            # Only display if we have a tutor for this slot
             if tutor_idx < len(tutors):
                 tutor = tutors[tutor_idx]
 
                 with col:
-                    # Profile picture
                     try:
                         st.image(tutor['image'], width=80)
                     except:
@@ -384,24 +489,18 @@ if st.session_state.current_page == 'home':
                             unsafe_allow_html=True
                         )
 
-                    # Name
                     st.markdown(f"**{tutor['name']}**")
-
-                    # Bio
                     st.markdown(tutor['bio'])
 
-                    # Subject tags - show ALL subjects, 2 per row
+                    # Subject tags - 2 per row
                     tags_html = '<div style="margin-top: 0.5rem;">'
                     for i, subject_idx in enumerate(tutor['subjects']):
                         if subject_idx < len(SUBJECTS):
                             subject_name = SUBJECTS[subject_idx]
-
-                            # Start a new row div every 2 tags
                             if i % 2 == 0:
                                 if i > 0:
-                                    tags_html += '</div>'  # Close previous row
+                                    tags_html += '</div>'
                                 tags_html += '<div style="margin-bottom: 0.5rem;">'
-
                             tags_html += f'''<span style="
                                 display: inline-block;
                                 background: #E3F2FD;
@@ -412,19 +511,122 @@ if st.session_state.current_page == 'home':
                                 font-weight: 500;
                                 margin-right: 0.5rem;
                             ">{subject_name}</span>'''
-
-                    # Close the last row div
                     if tutor['subjects']:
                         tags_html += '</div>'
                     tags_html += '</div>'
-
                     st.markdown(tags_html, unsafe_allow_html=True)
                     st.markdown("<br>", unsafe_allow_html=True)
+
+# ===== SIGN IN PAGE =====
+elif st.session_state.current_page == 'portal':
+    st.markdown("# Welcome back to BridgeSTEM")
+    st.markdown("<div class='section-text'>Please sign in to access your portal.</div>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    with st.form("sign_in_form"):
+        st.markdown("### Sign In")
+        col1, col2 = st.columns(2)
+        with col1:
+            sign_in_first = st.text_input("First Name *", placeholder="John")
+        with col2:
+            sign_in_last = st.text_input("Last Name *", placeholder="Doe")
+        sign_in_username = st.text_input("Username *", placeholder="johndoe123")
+
+        sign_in_submitted = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+
+        if sign_in_submitted:
+            if not sign_in_first or not sign_in_last or not sign_in_username:
+                st.error("⚠️ Please fill in all fields.")
+            elif verifyStudent(sign_in_first, sign_in_last, sign_in_username):
+                st.session_state.signed_in = True
+                st.session_state.signed_in_user = f"{sign_in_first} {sign_in_last}"
+                st.session_state.user_type = 'student'
+                st.session_state.current_page = 'student_portal'
+                st.query_params['user'] = f"{sign_in_first} {sign_in_last}"
+                st.query_params['type'] = 'student'
+                st.query_params['page'] = 'student_portal'
+                st.rerun()
+            elif verifyTutor(sign_in_first, sign_in_last, sign_in_username):
+                st.session_state.signed_in = True
+                st.session_state.signed_in_user = f"{sign_in_first} {sign_in_last}"
+                st.session_state.user_type = 'tutor'
+                st.session_state.current_page = 'tutor_portal'
+                st.query_params['user'] = f"{sign_in_first} {sign_in_last}"
+                st.query_params['type'] = 'tutor'
+                st.query_params['page'] = 'tutor_portal'
+                st.rerun()
+            else:
+                st.error("⚠️ No account found matching those details. Please check your information or create an account.")
+
+# ===== STUDENT PORTAL PAGE =====
+elif st.session_state.current_page == 'student_portal':
+    st.markdown(f"# Welcome, {st.session_state.signed_in_user}!")
+    if st.session_state.show_confetti:
+        st.balloons()
+        st.session_state.show_confetti = False
+
+    SUBJECTS = openSubjectList()
+    student_subject_indices = getStudentSubjects(st.session_state.signed_in_user)
+
+    if student_subject_indices:
+        st.markdown("**Your Subjects:**")
+        tags_html = '<div style="margin-top: 0.5rem;">'
+        for i, subject_idx in enumerate(student_subject_indices):
+            if subject_idx < len(SUBJECTS):
+                if i % 6 == 0:
+                    if i > 0:
+                        tags_html += '</div>'
+                    tags_html += '<div style="margin-bottom: 0.5rem;">'
+                tags_html += f'''<span style="
+                    display: inline-block;
+                    background: #E3F2FD;
+                    color: #1976D2;
+                    padding: 0.25rem 0.75rem;
+                    border-radius: 20px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    margin-right: 0.5rem;
+                ">{SUBJECTS[subject_idx]}</span>'''
+        tags_html += '</div></div>'
+        st.markdown(tags_html, unsafe_allow_html=True)
+
+    # Student portal content goes here
+
+# ===== TUTOR PORTAL PAGE =====
+elif st.session_state.current_page == 'tutor_portal':
+    st.markdown(f"# Welcome, {st.session_state.signed_in_user}!")
+
+    SUBJECTS = openSubjectList()
+    tutor_subject_indices = getTutorSubjects(st.session_state.signed_in_user)
+
+    if tutor_subject_indices:
+        st.markdown("**Subjects you Tutor:**")
+        tags_html = '<div style="margin-top: 0.5rem;">'
+        for i, subject_idx in enumerate(tutor_subject_indices):
+            if subject_idx < len(SUBJECTS):
+                if i % 6 == 0:
+                    if i > 0:
+                        tags_html += '</div>'
+                    tags_html += '<div style="margin-bottom: 0.5rem;">'
+                tags_html += f'''<span style="
+                    display: inline-block;
+                    background: #E3F2FD;
+                    color: #1976D2;
+                    padding: 0.25rem 0.75rem;
+                    border-radius: 20px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    margin-right: 0.5rem;
+                ">{SUBJECTS[subject_idx]}</span>'''
+        tags_html += '</div></div>'
+        st.markdown(tags_html, unsafe_allow_html=True)
+
+    # Tutor portal content goes here
 
 # ===== CREATE ACCOUNT PAGE =====
 elif st.session_state.current_page == 'create_account':
     st.markdown("# Create Account")
-    st.markdown("<div class='section-text'>Fill out the form below to create your BridgeSTEM account.</div>",
+    st.markdown("<div class='section-text'>Fill out the form below to create your student account.</div>",
                 unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -483,15 +685,21 @@ elif st.session_state.current_page == 'create_account':
 
                 selected_subject_names = [SUBJECTS[i] for i in selected_subjects]
 
-                # Create the output data
-                account_data = {
-                    "firstName": first_name,
-                    "lastName": last_name,
-                    "username": username,
-                    "grade": grade,
-                    "subjects": selected_subjects  # List of indices
-                }
+                Student(
+                    firstName=first_name,
+                    lastName=last_name,
+                    username=username,
+                    grade=grade,
+                    subjects=selected_subjects
+                )
 
-                # Navigate back to home page
-                st.session_state.current_page = 'home'
+                # Sign in automatically and redirect to student portal with confetti
+                st.session_state.signed_in = True
+                st.session_state.signed_in_user = f"{first_name} {last_name}"
+                st.session_state.user_type = 'student'
+                st.session_state.show_confetti = True
+                st.session_state.current_page = 'student_portal'
+                st.query_params['user'] = f"{first_name} {last_name}"
+                st.query_params['type'] = 'student'
+                st.query_params['page'] = 'student_portal'
                 st.rerun()
